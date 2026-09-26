@@ -1,4 +1,4 @@
-import { loadSession } from "./session";
+import { clearSession, loadSession } from "./session";
 import type { Case, CaseStatus, Message, Role, User } from "./types";
 
 // The API client. Pages call these functions; they never call fetch themselves (ADR 0001).
@@ -15,7 +15,17 @@ export class ApiError extends Error {
 
 type Fetch = typeof fetch;
 
-export function createApi(baseUrl: string, getToken: () => string | undefined, fetchImpl: Fetch = (...args) => fetch(...args)) {
+export interface ApiOptions {
+  // Called when the server answers 401: the token is missing, expired or signed with another secret.
+  onUnauthorized?: () => void;
+}
+
+export function createApi(
+  baseUrl: string,
+  getToken: () => string | undefined,
+  fetchImpl: Fetch = (...args) => fetch(...args),
+  options: ApiOptions = {},
+) {
   async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = {};
     const token = getToken();
@@ -34,6 +44,7 @@ export function createApi(baseUrl: string, getToken: () => string | undefined, f
     }
     const data = await res.json().catch(() => null);
     if (!res.ok) {
+      if (res.status === 401) options.onUnauthorized?.();
       throw new ApiError(res.status, (data as { error?: string } | null)?.error ?? `Request failed (${res.status})`);
     }
     return data as T;
@@ -71,4 +82,10 @@ export type Api = ReturnType<typeof createApi>;
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
-export const api: Api = createApi(API_URL, () => loadSession()?.token);
+// A 401 means the session is no longer valid (the JWT lasts 12 hours), so log out and go to /login.
+function logOut() {
+  clearSession();
+  if (typeof window !== "undefined" && window.location.pathname !== "/login") window.location.replace("/login");
+}
+
+export const api: Api = createApi(API_URL, () => loadSession()?.token, undefined, { onUnauthorized: logOut });

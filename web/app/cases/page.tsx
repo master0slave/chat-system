@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
-import { upsertCase } from "@/lib/cases";
-import { connectEvents } from "@/lib/socket";
+import { watchCases } from "@/lib/cases";
+import type { SocketStatus } from "@/lib/socket";
 import type { Case, CaseStatus } from "@/lib/types";
 import { useSession } from "../use-session";
 
@@ -21,32 +21,40 @@ export default function CasesPage() {
   const [cases, setCases] = useState<Case[]>([]);
   const [filter, setFilter] = useState<CaseStatus | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
-  const isAgent = session?.user.role === "agent";
+  const [socketStatus, setSocketStatus] = useState<SocketStatus>("connecting");
+  const role = session?.user.role;
 
+  // Customers load their own cases once. They have no live feed (docs/events.md).
   useEffect(() => {
-    if (!session) return;
+    if (role !== "customer") return;
     let active = true;
     api
-      .listCases(filter)
+      .listCases()
       .then((list) => active && setCases(list))
       .catch((err: Error) => active && setError(err.message));
     return () => {
       active = false;
     };
-  }, [session, filter]);
+  }, [role]);
 
-  // Agents see new cases and status changes live.
+  // Agents see new cases and status changes live, and the list reloads after every reconnect.
   useEffect(() => {
-    if (!isAgent) return;
-    return connectEvents({
+    if (role !== "agent") return;
+    setError(null);
+    return watchCases({
+      filter,
+      load: () => api.listCases(filter),
       url: api.agentEventsUrl,
-      onEvent: (e) => {
-        if (e.type === "case.created" || e.type === "case.status_changed") {
-          setCases((list) => upsertCase(list, e.data, filter));
-        }
+      onCases: (list) => {
+        setError(null);
+        setCases(list);
       },
+      onStatus: setSocketStatus,
+      onError: (err) => setError(err instanceof Error ? err.message : "Could not load cases"),
     });
-  }, [isAgent, filter]);
+  }, [role, filter]);
+
+  const isAgent = role === "agent";
 
   if (!session) return null;
 
@@ -67,6 +75,11 @@ export default function CasesPage() {
                 {f.label}
               </button>
             ))}
+          </p>
+        )}
+        {isAgent && socketStatus === "reconnecting" && (
+          <p className="banner" data-testid="reconnecting-banner">
+            Reconnecting…
           </p>
         )}
         {error && <p className="error">{error}</p>}

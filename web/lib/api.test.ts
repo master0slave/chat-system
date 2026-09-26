@@ -74,3 +74,25 @@ describe("createApi", () => {
     expect(api.agentEventsUrl()).toBe("wss://api.example/v1/cases/events?token=a%20b");
   });
 });
+
+describe("unauthorized responses", () => {
+  it("calls onUnauthorized on 401 and still rejects", async () => {
+    let calls = 0;
+    const api = createApi("http://api", () => "expired", fakeFetch(401, { error: "unauthorized" }).impl, {
+      onUnauthorized: () => calls++,
+    });
+
+    await expect(api.getCase("c1")).rejects.toMatchObject({ status: 401 });
+    expect(calls).toBe(1);
+  });
+
+  it("does not call onUnauthorized for other errors", async () => {
+    let calls = 0;
+    const api = createApi("http://api", () => "tok", fakeFetch(403, { error: "forbidden" }).impl, {
+      onUnauthorized: () => calls++,
+    });
+
+    await expect(api.getCase("c1")).rejects.toMatchObject({ status: 403 });
+    expect(calls).toBe(0);
+  });
+});
