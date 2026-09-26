@@ -12,10 +12,6 @@ import (
 
 var errNotImplemented = errors.New("not implemented")
 
-func (s *caseService) JoinCase(context.Context, models.User, string) (models.Case, error) {
-	return models.Case{}, errNotImplemented
-}
-
 func (s *caseService) SendMessage(context.Context, models.User, string, string) (models.Message, error) {
 	return models.Message{}, errNotImplemented
 }
