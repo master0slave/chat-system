@@ -1,0 +1,14 @@
+---
+description: WebSocket events must match docs/events.md
+globs: api/realtime/**,api/handlers/events*.go,web/lib/socket*
+---
+
+# Real-time events
+
+`docs/events.md` is the source of truth for WebSocket events (ADR 0003, ADR 0004).
+
+- Adding or changing an event type or its `data` means updating `docs/events.md` in the same commit.
+- Sockets are **server-to-client only**. Commands go through REST.
+- Event types are constants in `api/business/models/event.go`. Never write the string by hand.
+- Publishing must never block: keep the Hub's drop-slow-subscriber behaviour.
+- Clients merge events and REST responses by message `id`, and refetch after reconnecting.

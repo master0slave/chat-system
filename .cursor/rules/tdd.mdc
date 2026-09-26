@@ -1,0 +1,18 @@
+---
+description: Test-driven development cycle for every change
+alwaysApply: true
+---
+
+# TDD
+
+Work in Red → Green → Refactor steps:
+
+1. **Red:** write one failing test for the next behaviour. Run it and confirm it fails for the expected reason (not a typo or compile error elsewhere).
+2. **Green:** write the least code that makes it pass.
+3. **Refactor:** clean up while the tests stay green.
+
+Run `make test` after each step.
+
+- Use-case tests use the in-memory fakes in `api/business/usecases/fakes_test.go`, never MongoDB.
+- Bug fixes start with a test that reproduces the bug.
+- Do not write production code that no failing test asked for.

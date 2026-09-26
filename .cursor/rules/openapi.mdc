@@ -1,0 +1,13 @@
+---
+description: REST routes must match docs/openapi.yaml
+globs: api/handlers/**
+---
+
+# OpenAPI contract
+
+`docs/openapi.yaml` is the source of truth for REST (ADR 0003).
+
+- Adding, removing or changing a route, a request field, a response field, or a status code means updating `docs/openapi.yaml` in the same commit.
+- Routes are registered only in `api/handlers/router.go`.
+- Errors are always `{"error": "<message>"}` with the status from `handlers/errors.go`.
+- Never put internal details (driver errors, stack traces) in a response. Unknown errors are `500 {"error":"internal error"}` and are logged.

@@ -1,0 +1,12 @@
+---
+description: What "done" means
+alwaysApply: true
+---
+
+# Verification
+
+A change is done only when `make test` passes on your machine, and you have read its output.
+
+- Do not say "should work" or "tests pass" without running `make test` in this session.
+- If a test fails, report the failure with its output. Do not skip, delete, or weaken the test to make it pass.
+- If `make test` cannot run (for example, Docker is not running), say so. Do not report the change as done.

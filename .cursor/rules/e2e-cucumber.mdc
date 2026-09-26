@@ -1,0 +1,18 @@
+---
+description: Cucumber + Playwright E2E conventions (ADR 0006, ADR 0007)
+globs: e2e/**
+---
+
+# E2E with Cucumber
+
+See [ADR 0006](../../docs/adr/0006-page-object-pattern-for-e2e-tests.md) and [ADR 0007](../../docs/adr/0007-declarative-feature-files.md).
+
+- One feature file per user story in `e2e/cucumber/features/`, starting with `As a / I want / So that`.
+- Steps are declarative business language.
+
+  ✅ `When agent "Bob" joins Ann's case`
+  ❌ `When I click the "Join" button`
+
+- Selectors live only in Page Objects in `e2e/cucumber/pages/`, using `data-testid` or roles.
+- Step definitions call Page Objects. They never call `page.locator` directly.
+- Each actor gets its own browser context, so real-time scenarios use two or more contexts.

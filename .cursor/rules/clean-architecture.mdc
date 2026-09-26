@@ -1,0 +1,25 @@
+---
+description: Dependency rule for the Go API (ADR 0001)
+globs: api/**/*.go
+---
+
+# Clean Architecture
+
+See [ADR 0001](../../docs/adr/0001-clean-architecture-dependency-rule.md). `api/architecture_test.go` enforces the import rules.
+
+| Package | May import |
+|---|---|
+| `business/models` | standard library only |
+| `business/usecases` | `business/models` + standard library |
+| `handlers`, `repositories`, `realtime`, `pkg/...` | `business/...` + libraries; never each other |
+| `main` | everything (wiring only) |
+
+✅ Declare what a use case needs as an interface in `<name>_driven_ports.go`, and implement it in an adapter.
+❌ `import "go.mongodb.org/mongo-driver/v2/mongo"` in `business/`.
+
+✅ A handler calls `usecases.CaseService`.
+❌ A handler calls `repositories.MongoCaseRepository`.
+
+- One use case per file in `business/usecases/` (`open_case.go`, `join_case.go`, …).
+- Business rules and their errors (`models.ErrForbidden`, …) live in use cases, not in handlers or repositories.
+- Map errors to HTTP statuses only in `handlers/errors.go`.
