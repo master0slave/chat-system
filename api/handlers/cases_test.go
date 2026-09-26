@@ -75,9 +75,11 @@ func TestListCasesPassesStatusAndNeverReturnsNull(t *testing.T) {
 func TestCaseRoutesPassTheCaseID(t *testing.T) {
 	open := models.Case{ID: "c1", Status: models.StatusOpen}
 	cases := &stubCases{
-		getCase:   func(_ models.User, id string) (models.Case, error) { return models.Case{ID: id}, nil },
-		joinCase:  func(_ models.User, id string) (models.Case, error) { return open, nil },
-		closeCase: func(_ models.User, id string) (models.Case, error) { return models.Case{ID: id, Status: models.StatusClosed}, nil },
+		getCase:  func(_ models.User, id string) (models.Case, error) { return models.Case{ID: id}, nil },
+		joinCase: func(_ models.User, id string) (models.Case, error) { return open, nil },
+		closeCase: func(_ models.User, id string) (models.Case, error) {
+			return models.Case{ID: id, Status: models.StatusClosed}, nil
+		},
 		sendMessage: func(_ models.User, id, body string) (models.Message, error) {
 			return models.Message{ID: "m9", CaseID: id, Body: body}, nil
 		},

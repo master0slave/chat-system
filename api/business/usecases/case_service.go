@@ -26,12 +26,9 @@ func NewCaseService(deps CaseDeps) CaseService {
 
 const maxUpdateAttempts = 3
 
-// errNoChange lets a change function say "nothing to save" (for example, joining twice).
-var errNoChange = errors.New("no change")
-
 // updateCase loads a case, applies change and saves it. When another request saved the
-// case in between, it reloads and tries again, so two agents joining at once both end up
-// as participants. If change returns an error, updateCase returns the loaded case and that error.
+// case in between, it reloads and tries again, so a close never overwrites a concurrent join.
+// If change returns an error, updateCase returns the loaded case and that error.
 func (s *caseService) updateCase(ctx context.Context, id string, change func(*models.Case) error) (models.Case, error) {
 	for attempt := 1; ; attempt++ {
 		c, err := s.Cases.Get(ctx, id)

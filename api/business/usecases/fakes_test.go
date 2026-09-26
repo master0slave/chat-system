@@ -27,9 +27,9 @@ var (
 type fakeCaseRepo struct {
 	mu    sync.Mutex
 	cases map[string]models.Case
-	// beforeUpdate, if set, runs inside Update before the version check.
-	// Tests use it to simulate another request saving first.
-	beforeUpdate func()
+	// beforeWrite, if set, runs once at the start of the next Update, AddParticipant or
+	// TouchForParticipant. Tests use it to simulate another request saving first.
+	beforeWrite func()
 }
 
 func newFakeCaseRepo() *fakeCaseRepo { return &fakeCaseRepo{cases: map[string]models.Case{}} }
@@ -51,11 +51,15 @@ func (r *fakeCaseRepo) Get(_ context.Context, id string) (models.Case, error) {
 	return clone(c), nil
 }
 
-func (r *fakeCaseRepo) Update(_ context.Context, c models.Case) error {
-	if hook := r.beforeUpdate; hook != nil {
-		r.beforeUpdate = nil
+func (r *fakeCaseRepo) runBeforeWrite() {
+	if hook := r.beforeWrite; hook != nil {
+		r.beforeWrite = nil
 		hook()
 	}
+}
+
+func (r *fakeCaseRepo) Update(_ context.Context, c models.Case) error {
+	r.runBeforeWrite()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	stored, ok := r.cases[c.ID]
@@ -68,6 +72,43 @@ func (r *fakeCaseRepo) Update(_ context.Context, c models.Case) error {
 	c = clone(c)
 	c.Version++
 	r.cases[c.ID] = c
+	return nil
+}
+
+func (r *fakeCaseRepo) AddParticipant(_ context.Context, caseID string, p models.Participant) (models.Case, error) {
+	r.runBeforeWrite()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.cases[caseID]
+	if !ok {
+		return models.Case{}, models.ErrNotFound
+	}
+	if c.Status == models.StatusClosed || c.HasParticipant(p.UserID) {
+		return models.Case{}, models.ErrConflict
+	}
+	before := clone(c)
+	c = clone(c)
+	c.Participants = append(c.Participants, p)
+	c.Status = models.StatusOpen
+	c.UpdatedAt = p.JoinedAt
+	c.Version++
+	r.cases[caseID] = c
+	return before, nil
+}
+
+func (r *fakeCaseRepo) TouchForParticipant(_ context.Context, caseID, userID string, at time.Time) error {
+	r.runBeforeWrite()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.cases[caseID]
+	if !ok {
+		return models.ErrNotFound
+	}
+	if c.Status == models.StatusClosed || !c.HasParticipant(userID) {
+		return models.ErrConflict
+	}
+	c.UpdatedAt = at
+	r.cases[caseID] = c
 	return nil
 }
 
@@ -243,4 +284,3 @@ func bodies(ms []models.Message) []string {
 	}
 	return out
 }
-

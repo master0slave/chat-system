@@ -98,4 +98,3 @@ func call(t *testing.T, e *echo.Echo, method, path, token, body string) *httptes
 	e.ServeHTTP(rec, req)
 	return rec
 }
-

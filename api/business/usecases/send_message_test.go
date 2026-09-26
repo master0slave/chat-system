@@ -70,7 +70,7 @@ func TestSendMessageLosesRaceWithClose(t *testing.T) {
 	opened := e.openCase(t, ann, "help")
 	e.join(t, bob, opened.ID)
 	// Bob closes the case between Ann's read and Ann's write.
-	e.cases.beforeUpdate = func() { e.close(t, bob, opened.ID) }
+	e.cases.beforeWrite = func() { e.close(t, bob, opened.ID) }
 
 	_, err := e.svc.SendMessage(context.Background(), ann, opened.ID, "one more thing")
 

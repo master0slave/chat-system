@@ -69,7 +69,50 @@ func (r *MongoCaseRepository) Update(ctx context.Context, c models.Case) error {
 	if res.MatchedCount == 1 {
 		return nil
 	}
-	n, err := r.col.CountDocuments(ctx, bson.M{"_id": c.ID})
+	return r.conflictOrNotFound(ctx, c.ID)
+}
+
+func (r *MongoCaseRepository) AddParticipant(ctx context.Context, caseID string, p models.Participant) (models.Case, error) {
+	filter := bson.M{
+		"_id":                 caseID,
+		"status":              bson.M{"$ne": string(models.StatusClosed)},
+		"participants.userId": bson.M{"$ne": p.UserID},
+	}
+	update := bson.M{
+		"$push": bson.M{"participants": toParticipantDoc(p)},
+		"$set":  bson.M{"status": string(models.StatusOpen), "updatedAt": p.JoinedAt},
+		"$inc":  bson.M{"version": 1},
+	}
+	var before caseDoc
+	err := r.col.FindOneAndUpdate(ctx, filter, update, options.FindOneAndUpdate().SetReturnDocument(options.Before)).Decode(&before)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return models.Case{}, r.conflictOrNotFound(ctx, caseID)
+	}
+	if err != nil {
+		return models.Case{}, err
+	}
+	return before.toModel(), nil
+}
+
+func (r *MongoCaseRepository) TouchForParticipant(ctx context.Context, caseID, userID string, at time.Time) error {
+	filter := bson.M{
+		"_id":                 caseID,
+		"status":              bson.M{"$ne": string(models.StatusClosed)},
+		"participants.userId": userID,
+	}
+	res, err := r.col.UpdateOne(ctx, filter, bson.M{"$set": bson.M{"updatedAt": at}})
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 1 {
+		return nil
+	}
+	return r.conflictOrNotFound(ctx, caseID)
+}
+
+// conflictOrNotFound explains why a conditional write matched nothing.
+func (r *MongoCaseRepository) conflictOrNotFound(ctx context.Context, caseID string) error {
+	n, err := r.col.CountDocuments(ctx, bson.M{"_id": caseID})
 	if err != nil {
 		return err
 	}
@@ -105,7 +148,7 @@ func (r *MongoCaseRepository) List(ctx context.Context, f usecases.CaseFilter) (
 func toCaseDoc(c models.Case) caseDoc {
 	ps := make([]participantDoc, 0, len(c.Participants))
 	for _, p := range c.Participants {
-		ps = append(ps, participantDoc{UserID: p.UserID, Name: p.Name, Role: string(p.Role), JoinedAt: p.JoinedAt})
+		ps = append(ps, toParticipantDoc(p))
 	}
 	return caseDoc{
 		ID:           c.ID,
@@ -118,6 +161,10 @@ func toCaseDoc(c models.Case) caseDoc {
 		ClosedAt:     c.ClosedAt,
 		Version:      c.Version,
 	}
+}
+
+func toParticipantDoc(p models.Participant) participantDoc {
+	return participantDoc{UserID: p.UserID, Name: p.Name, Role: string(p.Role), JoinedAt: p.JoinedAt}
 }
 
 func (d caseDoc) toModel() models.Case {

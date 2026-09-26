@@ -21,6 +21,15 @@ type CaseRepository interface {
 	// Update saves c only if the stored version equals c.Version, and stores c.Version+1.
 	// It returns models.ErrConflict when another request saved first, and models.ErrNotFound for an unknown id.
 	Update(ctx context.Context, c models.Case) error
+	// AddParticipant appends p in one atomic write: it sets status open, UpdatedAt to p.JoinedAt
+	// and bumps the version, but only if the case is not closed and p.UserID is not a participant yet.
+	// It returns the case as it was before the change, models.ErrConflict when that condition
+	// failed, and models.ErrNotFound for an unknown id. Concurrent joins never conflict with each other.
+	AddParticipant(ctx context.Context, caseID string, p models.Participant) (models.Case, error)
+	// TouchForParticipant sets UpdatedAt in one atomic write, only if the case is not closed and
+	// userID is a participant. It does not bump the version, so concurrent senders never conflict.
+	// It returns models.ErrConflict when the condition failed, and models.ErrNotFound for an unknown id.
+	TouchForParticipant(ctx context.Context, caseID, userID string, at time.Time) error
 	// List returns matching cases, newest UpdatedAt first.
 	List(ctx context.Context, f CaseFilter) ([]models.Case, error)
 }

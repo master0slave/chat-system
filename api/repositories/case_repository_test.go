@@ -103,3 +103,51 @@ func caseIDs(cs []models.Case) []string {
 	}
 	return out
 }
+
+func TestCaseRepositoryAddParticipant(t *testing.T) {
+	repo := repositories.NewMongoCaseRepository(testDB(t))
+	ctx := context.Background()
+	require.NoError(t, repo.Insert(ctx, sampleCase("c1", "customer:ann", models.StatusWaiting, t0)))
+	bob := models.Participant{UserID: "agent:bob", Name: "Bob", Role: models.RoleAgent, JoinedAt: t0.Add(time.Minute)}
+
+	before, err := repo.AddParticipant(ctx, "c1", bob)
+
+	require.NoError(t, err)
+	assert.Equal(t, models.StatusWaiting, before.Status, "returns the case as it was before the change")
+	assert.Equal(t, 1, before.Version)
+	stored, err := repo.Get(ctx, "c1")
+	require.NoError(t, err)
+	assert.Equal(t, models.StatusOpen, stored.Status)
+	assert.Equal(t, bob, stored.Participants[1])
+	assert.Equal(t, t0.Add(time.Minute), stored.UpdatedAt)
+	assert.Equal(t, 2, stored.Version)
+
+	_, err = repo.AddParticipant(ctx, "c1", bob)
+	assert.ErrorIs(t, err, models.ErrConflict, "already a participant")
+
+	_, err = repo.AddParticipant(ctx, "missing", bob)
+	assert.ErrorIs(t, err, models.ErrNotFound)
+
+	require.NoError(t, repo.Insert(ctx, sampleCase("closed", "customer:ann", models.StatusClosed, t0)))
+	_, err = repo.AddParticipant(ctx, "closed", bob)
+	assert.ErrorIs(t, err, models.ErrConflict, "closed case")
+}
+
+func TestCaseRepositoryTouchForParticipant(t *testing.T) {
+	repo := repositories.NewMongoCaseRepository(testDB(t))
+	ctx := context.Background()
+	require.NoError(t, repo.Insert(ctx, sampleCase("c1", "customer:ann", models.StatusOpen, t0)))
+	later := t0.Add(time.Hour)
+
+	require.NoError(t, repo.TouchForParticipant(ctx, "c1", "customer:ann", later))
+
+	stored, err := repo.Get(ctx, "c1")
+	require.NoError(t, err)
+	assert.Equal(t, later, stored.UpdatedAt)
+	assert.Equal(t, 1, stored.Version, "touching does not compete with other writers")
+
+	assert.ErrorIs(t, repo.TouchForParticipant(ctx, "c1", "agent:dan", later), models.ErrConflict, "not a participant")
+	assert.ErrorIs(t, repo.TouchForParticipant(ctx, "missing", "customer:ann", later), models.ErrNotFound)
+	require.NoError(t, repo.Insert(ctx, sampleCase("closed", "customer:ann", models.StatusClosed, t0)))
+	assert.ErrorIs(t, repo.TouchForParticipant(ctx, "closed", "customer:ann", later), models.ErrConflict, "closed case")
+}
