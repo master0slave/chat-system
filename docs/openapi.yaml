@@ -1,0 +1,279 @@
+openapi: 3.0.3
+info:
+  title: Support Chat API
+  version: 1.0.0
+  description: |
+    REST contract for commands and queries (ADR 0003). WebSocket events are in events.md.
+    Every route except POST /v1/login needs `Authorization: Bearer <token>`.
+    Every error response is `{"error": "<message>"}`.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+
+paths:
+  /v1/login:
+    post:
+      summary: Log in with a name and role (no password, ADR 0005)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, role]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 50, example: Ann }
+                role: { $ref: '#/components/schemas/Role' }
+      responses:
+        '200':
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, user]
+                properties:
+                  token: { type: string }
+                  user: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/InvalidInput' }
+
+  /v1/cases:
+    post:
+      summary: Open a case with a first question (customers only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string, description: '1–2000 characters after trimming' }
+      responses:
+        '201':
+          description: The new case (status waiting) and its first message
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [case, message]
+                properties:
+                  case: { $ref: '#/components/schemas/Case' }
+                  message: { $ref: '#/components/schemas/Message' }
+        '400': { $ref: '#/components/responses/InvalidInput' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    get:
+      summary: List cases, newest updatedAt first
+      description: A customer gets only their own cases. An agent gets every case.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/CaseStatus' }
+      responses:
+        '200':
+          description: Cases (an empty array when there are none)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Case' }
+        '400': { $ref: '#/components/responses/InvalidInput' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/cases/{id}:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    get:
+      summary: Get a case and its participants (its customer, or any agent)
+      responses:
+        '200':
+          description: The case
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Case' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/cases/{id}/join:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    post:
+      summary: Join a case (agents only, idempotent)
+      description: The first join moves the case from waiting to open. Joining again returns the case unchanged.
+      responses:
+        '200':
+          description: The case after joining
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Case' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /v1/cases/{id}/messages:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    get:
+      summary: List messages, newest first (its customer, or any agent)
+      parameters:
+        - name: before
+          in: query
+          required: false
+          description: Return only messages older than the message with this id. Use the last id of the previous page.
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          description: Default 50. Values above 100 are treated as 100.
+          schema: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: Messages (an empty array when there are none)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Message' }
+        '400': { $ref: '#/components/responses/InvalidInput' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      summary: Send a message (participants only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string, description: '1–2000 characters after trimming' }
+      responses:
+        '201':
+          description: The saved message. It is also sent as a message.created event.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        '400': { $ref: '#/components/responses/InvalidInput' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /v1/cases/{id}/close:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    post:
+      summary: Close a case (agents who have joined)
+      responses:
+        '200':
+          description: The closed case
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Case' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    CaseId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+
+  schemas:
+    Role:
+      type: string
+      enum: [customer, agent]
+    CaseStatus:
+      type: string
+      enum: [waiting, open, closed]
+    User:
+      type: object
+      required: [id, name, role]
+      properties:
+        id: { type: string, example: 'customer:ann' }
+        name: { type: string, example: Ann }
+        role: { $ref: '#/components/schemas/Role' }
+    Participant:
+      type: object
+      required: [userId, name, role, joinedAt]
+      properties:
+        userId: { type: string }
+        name: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        joinedAt: { type: string, format: date-time }
+    Case:
+      type: object
+      required: [id, subject, customerId, participants, status, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        subject: { type: string, description: 'The first question on one line, at most 80 characters' }
+        customerId: { type: string }
+        participants:
+          type: array
+          items: { $ref: '#/components/schemas/Participant' }
+        status: { $ref: '#/components/schemas/CaseStatus' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        closedAt: { type: string, format: date-time, description: 'Present only when status is closed' }
+    Message:
+      type: object
+      required: [id, caseId, senderId, senderName, senderRole, kind, body, createdAt]
+      properties:
+        id: { type: string, description: 'Sorts in creation order (UUIDv7)' }
+        caseId: { type: string }
+        senderId: { type: string }
+        senderName: { type: string }
+        senderRole: { $ref: '#/components/schemas/Role' }
+        kind: { type: string, enum: [text, system] }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+
+  responses:
+    InvalidInput:
+      description: The request body or a parameter is invalid
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Missing, invalid or expired token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: The user may not do this
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: The case does not exist
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: The case is closed, or it was changed by another request at the same moment (retry)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
