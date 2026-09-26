@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { clearSession, loadSession, type Session } from "@/lib/session";
 
 export function Header() {
@@ -27,9 +28,9 @@ export function Header() {
           <span data-testid="current-user">
             {session.user.name} <span className="muted">({session.user.role})</span>
           </span>
-          <button className="secondary" data-testid="logout" onClick={logout}>
+          <Button variant="outline" data-testid="logout" onClick={logout}>
             Log out
-          </button>
+          </Button>
         </div>
       )}
     </header>

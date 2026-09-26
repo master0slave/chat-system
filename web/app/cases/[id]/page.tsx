@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { api, ApiError } from "@/lib/api";
 import { mergeMessages } from "@/lib/messages";
 import { connectEvents, type SocketStatus } from "@/lib/socket";
@@ -79,15 +85,10 @@ export default function CaseRoomPage() {
   if (!session) return null;
   if (loadError) {
     return (
-      <div className="card">
-        <p className="error" data-testid="room-error">
-          {loadError}
-        </p>
-        <Link href="/cases">Back to cases</Link>
-      </div>
+      <Alert variant="destructive" data-testid="room-error"><AlertDescription>{loadError}</AlertDescription></Alert>
     );
   }
-  if (!kase) return <p className="muted">Loading…</p>;
+  if (!kase) return <p className="muted loading-state"><Spinner /> Loading…</p>;
 
   const me = session.user;
   const isAgent = me.role === "agent";
@@ -95,51 +96,52 @@ export default function CaseRoomPage() {
   const closed = kase.status === "closed";
 
   return (
-    <div className="card">
-      <p>
-        <Link href="/cases">← Cases</Link>
-      </p>
-      <h1 data-testid="case-subject">{kase.subject}</h1>
+    <Card className="case-room">
+      <CardHeader>
+        <Link href="/cases" className="back-link">← Cases</Link>
+        <CardTitle data-testid="case-subject">{kase.subject}</CardTitle>
+      </CardHeader>
+      <CardContent>
       <p className="row">
-        <span className="status" data-testid="case-status">
+        <Badge variant={kase.status === "waiting" ? "outline" : kase.status === "open" ? "secondary" : "ghost"} className={`status status-${kase.status}`} data-testid="case-status">
           {kase.status}
-        </span>
+        </Badge>
         <span className="muted" data-testid="participants">
           {kase.participants.map((p) => p.name).join(", ")}
         </span>
       </p>
 
       {socketStatus === "reconnecting" && (
-        <p className="banner" data-testid="reconnecting-banner">
+        <Alert className="banner" data-testid="reconnecting-banner">
           Reconnecting…
-        </p>
+        </Alert>
       )}
-      {kase.status === "waiting" && !isAgent && <p className="banner">Waiting for a support agent to join…</p>}
+      {kase.status === "waiting" && !isAgent && <Alert className="banner">Waiting for a support agent to join…</Alert>}
       {closed && (
-        <p className="banner" data-testid="closed-banner">
+        <Alert className="banner" data-testid="closed-banner">
           This case is closed.
-        </p>
+        </Alert>
       )}
 
       <div className="row">
         {isAgent && !joined && !closed && (
-          <button data-testid="join-button" onClick={() => run(() => api.joinCase(id))}>
+          <Button data-testid="join-button" onClick={() => run(() => api.joinCase(id))}>
             Join case
-          </button>
+          </Button>
         )}
         {isAgent && joined && !closed && (
-          <button className="secondary" data-testid="close-button" onClick={() => run(() => api.closeCase(id))}>
+          <Button variant="outline" data-testid="close-button" onClick={() => run(() => api.closeCase(id))}>
             Close case
-          </button>
+          </Button>
         )}
       </div>
-      {actionError && <p className="error">{actionError}</p>}
+      {actionError && <Alert variant="destructive"><AlertDescription>{actionError}</AlertDescription></Alert>}
 
       {hasOlder && (
         <p>
-          <button className="secondary" data-testid="load-older" onClick={loadOlder}>
+          <Button variant="outline" data-testid="load-older" onClick={loadOlder}>
             Load older messages
-          </button>
+          </Button>
         </p>
       )}
       <div className="messages" data-testid="message-list">
@@ -159,7 +161,8 @@ export default function CaseRoomPage() {
       {joined && !closed && (
         <SendBox caseId={id} onSent={(m) => setMessages((current) => mergeMessages(current, [m]))} />
       )}
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -187,7 +190,7 @@ function SendBox({ caseId, onSent }: { caseId: string; onSent: (m: Message) => v
   return (
     <form onSubmit={send}>
       <div className="row">
-        <input
+        <Input
           type="text"
           data-testid="message-input"
           placeholder="Write a message"
@@ -195,17 +198,18 @@ function SendBox({ caseId, onSent }: { caseId: string; onSent: (m: Message) => v
           onChange={(e) => setDraft(e.target.value)}
           style={{ flex: 1 }}
         />
-        <button type="submit" data-testid="message-send" disabled={sending || draft.trim() === ""}>
+        <Button type="submit" data-testid="message-send" disabled={sending || draft.trim() === ""}>
+          {sending && <Spinner data-icon="inline-start" />}
           Send
-        </button>
+        </Button>
       </div>
       {error && (
-        <p className="row error" data-testid="send-error">
+        <Alert variant="destructive" className="row error" data-testid="send-error">
           Not sent: {error}
-          <button type="button" className="secondary" data-testid="send-retry" onClick={() => send()}>
+          <Button type="button" variant="outline" data-testid="send-retry" onClick={() => send()}>
             Retry
-          </button>
-        </p>
+          </Button>
+        </Alert>
       )}
     </form>
   );

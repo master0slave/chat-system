@@ -3,6 +3,17 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import { Activity, Inbox, Search } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 import { customerName, filterCases, summarizeCases } from "@/lib/case-inbox";
 import { watchCases } from "@/lib/cases";
@@ -72,10 +83,11 @@ export default function CasesPage() {
               <h1 id="inbox-title">Agent inbox</h1>
               <p className="muted">Triage customer cases and continue conversations.</p>
             </div>
-            <span className={`connection-state ${socketStatus}`} aria-live="polite">
-              <span className="connection-dot" />
+            <Badge variant={socketStatus === "open" ? "secondary" : "outline"} className="connection-state" aria-live="polite">
+              {socketStatus === "connecting" && <Spinner data-icon="inline-start" />}
+              <Activity data-icon="inline-start" />
               {socketStatus === "open" ? "Live updates on" : socketStatus === "reconnecting" ? "Reconnecting…" : "Connecting…"}
-            </span>
+            </Badge>
           </div>
 
           <div className="inbox-stats" aria-label="Case totals">
@@ -85,16 +97,16 @@ export default function CasesPage() {
             <SummaryCard label="Closed" count={summary.closed} selected={filter === "closed"} onClick={() => setFilter("closed")} />
           </div>
 
-          <div className="inbox-panel">
+          <Card className="inbox-panel">
             <div className="inbox-toolbar">
               <div>
                 <h2>Cases</h2>
                 <p className="muted">{visibleCases.length} {visibleCases.length === 1 ? "conversation" : "conversations"}</p>
               </div>
               <label className="search-field">
-                <span aria-hidden="true" className="search-icon">⌕</span>
+                <Search aria-hidden="true" />
                 <span className="sr-only">Search by subject or customer</span>
-                <input
+                <Input
                   type="search"
                   data-testid="case-search"
                   placeholder="Search cases or customers"
@@ -104,40 +116,47 @@ export default function CasesPage() {
               </label>
             </div>
 
-            <div className="inbox-filters" aria-label="Filter cases by status">
-              {FILTERS.map((f) => (
-                <button
+            <Tabs
+              value={filter ?? "all"}
+              onValueChange={(value) => setFilter(value === "all" ? undefined : (value as CaseStatus))}
+            >
+              <TabsList variant="line" className="inbox-filters" aria-label="Filter cases by status">
+                {FILTERS.map((f) => (
+                <TabsTrigger
                   key={f.label}
-                  className={`filter-tab ${filter === f.value ? "active" : ""}`}
                   data-testid={`status-filter-${f.value ?? "all"}`}
-                  aria-pressed={filter === f.value}
-                  onClick={() => setFilter(f.value)}
+                  value={f.value ?? "all"}
                 >
                   {f.label}
-                  <span>{f.value ? summary[f.value] : summary.all}</span>
-                </button>
-              ))}
-            </div>
+                  <Badge variant="secondary">{f.value ? summary[f.value] : summary.all}</Badge>
+                </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
 
-            {error && <p className="error inbox-error" role="alert">{error}</p>}
+            {error && <Alert variant="destructive" className="inbox-error"><AlertTitle>Could not load cases</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
             {cases.length === 0 ? (
-              <div className="inbox-empty" data-testid="case-list-empty">
-                <span className="empty-icon" aria-hidden="true">✉</span>
-                <h3>No cases yet</h3>
-                <p>New customer conversations will appear here automatically.</p>
-              </div>
+              <Empty className="inbox-empty" data-testid="case-list-empty">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon"><Inbox /></EmptyMedia>
+                  <EmptyTitle>No cases yet</EmptyTitle>
+                  <EmptyDescription>New customer conversations will appear here automatically.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : visibleCases.length === 0 ? (
-              <div className="inbox-empty" data-testid="case-search-empty">
-                <span className="empty-icon" aria-hidden="true">⌕</span>
-                <h3>No matching cases</h3>
-                <p>Try another search or status filter.</p>
-              </div>
+              <Empty className="inbox-empty" data-testid="case-search-empty">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon"><Search /></EmptyMedia>
+                  <EmptyTitle>No matching cases</EmptyTitle>
+                  <EmptyDescription>Try another search or status filter.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : (
               <ul className="case-list inbox-case-list" data-testid="case-list">
                 {visibleCases.map((c) => (
                   <li key={c.id} data-testid="case-item" data-case-id={c.id}>
                     <Link href={`/cases/${c.id}`} className="case-row">
-                      <span className={`case-avatar ${c.status}`} aria-hidden="true">{customerName(c).slice(0, 1).toUpperCase()}</span>
+                      <Avatar className={`case-avatar ${c.status}`} aria-hidden="true"><AvatarFallback>{customerName(c).slice(0, 1).toUpperCase()}</AvatarFallback></Avatar>
                       <span className="case-copy">
                         <span className="case-row-heading">
                           <strong data-testid="case-subject">{c.subject}</strong>
@@ -149,33 +168,35 @@ export default function CasesPage() {
                           <span>{c.participants.filter((person) => person.role === "agent").length} agent{c.participants.filter((person) => person.role === "agent").length === 1 ? "" : "s"}</span>
                         </span>
                       </span>
-                      <span className={`status status-${c.status}`} data-testid="case-status">{c.status}</span>
+                      <Badge variant={c.status === "waiting" ? "outline" : c.status === "open" ? "secondary" : "ghost"} className={`status status-${c.status}`} data-testid="case-status">{c.status}</Badge>
                     </Link>
                   </li>
                 ))}
               </ul>
             )}
-          </div>
+          </Card>
         </section>
       ) : (
-        <div className="card">
-          <h1>My cases</h1>
-          {error && <p className="error">{error}</p>}
+        <Card className="my-cases-card">
+          <CardHeader><CardTitle>My cases</CardTitle></CardHeader>
+          <CardContent>
+          {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
           {cases.length === 0 ? (
             <p className="muted" data-testid="case-list-empty">No cases yet.</p>
           ) : (
             <ul className="case-list" data-testid="case-list">
               {cases.map((c) => (
                 <li key={c.id} data-testid="case-item" data-case-id={c.id}>
-                  <Link href={`/cases/${c.id}`}>
+                  <Link href={`/cases/${c.id}`} className="customer-case-row">
                     <span data-testid="case-subject">{c.subject}</span>
-                    <span className="status" data-testid="case-status">{c.status}</span>
+                    <Badge variant={c.status === "waiting" ? "outline" : c.status === "open" ? "secondary" : "ghost"} data-testid="case-status">{c.status}</Badge>
                   </Link>
                 </li>
               ))}
             </ul>
           )}
-        </div>
+          </CardContent>
+        </Card>
       )}
     </>
   );
@@ -183,10 +204,10 @@ export default function CasesPage() {
 
 function SummaryCard({ label, count, selected, onClick }: { label: string; count: number; selected: boolean; onClick: () => void }) {
   return (
-    <button className={`summary-card ${selected ? "selected" : ""}`} onClick={onClick} aria-pressed={selected}>
+    <Button variant="outline" className={`summary-card ${selected ? "selected" : ""}`} onClick={onClick} aria-pressed={selected}>
       <span>{label}</span>
       <strong>{count}</strong>
-    </button>
+    </Button>
   );
 }
 
@@ -216,21 +237,25 @@ function NewCaseForm() {
   }
 
   return (
-    <form className="card" onSubmit={submit}>
-      <h1>Ask the support team</h1>
-      <textarea
+    <Card>
+      <CardHeader><CardTitle>Ask the support team</CardTitle></CardHeader>
+      <CardContent>
+      <form onSubmit={submit}>
+      <Textarea
         rows={3}
         data-testid="new-case-question"
         placeholder="What do you need help with?"
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
       />
-      {error && <p className="error">{error}</p>}
+      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
       <p>
-        <button type="submit" data-testid="new-case-submit" disabled={busy || question.trim() === ""}>
+        <Button type="submit" data-testid="new-case-submit" disabled={busy || question.trim() === ""}>
           Send question
-        </button>
+        </Button>
       </p>
-    </form>
+      </form>
+      </CardContent>
+    </Card>
   );
 }
