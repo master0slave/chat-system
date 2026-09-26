@@ -16,10 +16,6 @@ func (s *caseService) SendMessage(context.Context, models.User, string, string) 
 	return models.Message{}, errNotImplemented
 }
 
-func (s *caseService) CloseCase(context.Context, models.User, string) (models.Case, error) {
-	return models.Case{}, errNotImplemented
-}
-
 func (s *caseService) ListCases(context.Context, models.User, models.CaseStatus) ([]models.Case, error) {
 	return nil, errNotImplemented
 }
