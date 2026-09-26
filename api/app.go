@@ -34,7 +34,7 @@ func configFromEnv() config {
 		MongoURI:       env("MONGO_URI", "mongodb://localhost:27017"),
 		MongoDB:        env("MONGO_DB", "supportchat"),
 		JWTSecret:      env("JWT_SECRET", devJWTSecret),
-		AllowedOrigins: strings.Split(env("WEB_ORIGINS", "http://localhost:3000"), ","),
+		AllowedOrigins: strings.Split(env("WEB_ORIGINS", "http://localhost:3100"), ","),
 	}
 }
 

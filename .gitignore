@@ -4,3 +4,5 @@ node_modules/
 .next/
 api/bin/
 .superpowers/
+web/next-env.d.ts
+web/tsconfig.tsbuildinfo
