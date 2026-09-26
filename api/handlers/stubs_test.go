@@ -12,6 +12,7 @@ import (
 
 	"supportchat/business/models"
 	"supportchat/handlers"
+	"supportchat/realtime"
 )
 
 var (
@@ -72,9 +73,14 @@ func (s *stubCases) ListMessages(_ context.Context, a models.User, id, before st
 }
 
 func newRouter(auth stubAuth, cases *stubCases) *echo.Echo {
+	return newRouterWithHub(auth, cases, realtime.NewHub(realtime.DefaultBufferSize))
+}
+
+func newRouterWithHub(auth stubAuth, cases *stubCases, hub *realtime.Hub) *echo.Echo {
 	return handlers.NewRouter(handlers.Config{
 		Auth:           auth,
 		Cases:          cases,
+		Events:         hub,
 		AllowedOrigins: []string{"http://localhost:3000"},
 		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
